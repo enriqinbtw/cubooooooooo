@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cubo Mágico 3x3 - Cubinhos Separados</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            border-left: 4px solid #ff9800;
+        }
+        
+        #controls-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            color: #ccc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            font-family: monospace;
+            z-index: 10;
+        }
+        
+        @media (max-width: 600px) {
+            #info { font-size: 10px; top: 10px; left: 10px; }
+            #controls-hint { font-size: 9px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        🧊 Cubo Mágico 3x3 | Cubinhos separados | Arraste para rotacionar | Duplo clique para centralizar
+    </div>
+    <div id="controls-hint">
+        🖱️ Mouse: Arraste = girar vista | Duplo clique = centralizar
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuração da cena, câmera e renderizador ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122); // Fundo escuro para destacar os cubos brancos
+        
+        // Câmera perspectiva: posicionada para ver o cubo de frente
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 4, 6);
+        camera.lookAt(0, 0, 0);
+        
+        // Renderizador WebGL para os cubos
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        
+        // --- Controles Orbit: suporte a arrastar e duplo clique para centralizar ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;      // Inércia suave
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 1.5;
+        controls.zoomSpeed = 1.2;
+        controls.panSpeed = 0.8;
+        controls.enableZoom = true;
+        controls.enablePan = true;
+        
+        // Centralizar no duplo clique (restaura a posição inicial e target)
+        const initialCameraPos = new THREE.Vector3(5, 4, 6);
+        const initialTarget = new THREE.Vector3(0, 0, 0);
+        
+        renderer.domElement.addEventListener('dblclick', (event) => {
+            camera.position.copy(initialCameraPos);
+            controls.target.copy(initialTarget);
+            controls.update();
+        });
+        
+        // --- Iluminação suave e equilibrada para realçar os cubos brancos ---
+        // Luz ambiente para iluminação base
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        scene.add(ambientLight);
+        
+        // Luz direcional principal (frente e cima)
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        mainLight.position.set(3, 5, 2);
+        scene.add(mainLight);
+        
+        // Luz direcional secundária (traseira e lateral)
+        const backLight = new THREE.DirectionalLight(0x88aaff, 0.5);
+        backLight.position.set(-2, 2, -3);
+        scene.add(backLight);
+        
+        // Luz suave vindo de baixo para iluminar as faces inferiores
+        const fillLight = new THREE.PointLight(0x5577aa, 0.25);
+        fillLight.position.set(0, -3, 0);
+        scene.add(fillLight);
+        
+        // Luz lateral direita para dar mais definição
+        const rightLight = new THREE.PointLight(0xffaa88, 0.35);
+        rightLight.position.set(3, 1, 1);
+        scene.add(rightLight);
+        
+        // --- Criação do cubo mágico 3x3: 27 cubinhos separados uns dos outros ---
+        // Cada cubinho terá tamanho 0.85, com espaçamento de 1.1 entre centros
+        // Isso cria um espaçamento visível entre eles, como peças individuais flutuando
+        
+        const cubeSize = 0.85;      // Tamanho de cada cubinho
+        const spacing = 1.1;        // Distância entre centros dos cubinhos (maior que o tamanho, criando gap)
+        // Posições: -1, 0, 1 multiplicado pelo spacing
+        const positions = [-spacing, 0, spacing];
+        
+        // Material branco com acabamento fosco/levemente rugoso para um visual clean
+        const whiteMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.35,
+            metalness: 0.02,
+            emissive: 0x000000,
+            flatShading: false
+        });
+        
+        // Grupo para organizar todos os cubinhos
+        const cubeGroup = new THREE.Group();
+        
+        // Loop para criar os 27 cubos (3x3x3)
+        for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+                for (let k = -1; k <= 1; k++) {
+                    // Geometria do cubo
+                    const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+                    const cube = new THREE.Mesh(geometry, whiteMaterial);
+                    // Posiciona com espaçamento definido: cada eixo multiplicado pelo spacing
+                    cube.position.set(i * spacing, j * spacing, k * spacing);
+                    cube.castShadow = true;
+                    cube.receiveShadow = false;
+                    cubeGroup.add(cube);
+                }
+            }
+        }
+        
+        scene.add(cubeGroup);
+        
+        // Opcional: adicionar um leve contorno nas arestas dos cubinhos? Não necessário, mas para dar um toque sutil
+        // Mantemos apenas os cubos brancos com espaçamento visível.
+        
+        // --- NÃO adicionamos grid helper ou qualquer efeito de rede/quadrados embaixo do cubo ---
+        // O ambiente está limpo, apenas os cubos flutuando no espaço com fundo escuro
+        
+        // Pequeno efeito de partículas estelares? Não, para manter o foco no cubo.
+        // Mas podemos adicionar um leve "chão" invisível apenas para referência? Não, para evitar qualquer grade.
+        
+        // --- Animação e loop de renderização ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // Atualiza os controles (para damping suave)
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // --- Ajuste responsivo ao redimensionamento da janela ---
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        console.log('Cubo 3x3 branco criado com cubinhos separados (espaçamento visível entre eles). Sem grades ou efeitos de rede.');
+    </script>
+</body>
+</html>
